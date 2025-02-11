@@ -14,43 +14,24 @@ interface WixSubscription {
   expiresAt: string;
 }
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 export async function signInWithWix(code: string) {
   const { addToast } = useToast.getState();
 
   try {
-    // Exchange the authorization code for tokens
-    const tokenResponse = await fetch('https://www.wixapis.com/oauth2/token', {
+    // 🔄 Instead of calling Wix directly, send the request to your backend
+    const response = await fetch(`${API_URL}/auth/wix-login`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        grant_type: 'authorization_code',
-        client_id: config.wix.clientId,
-        client_secret: config.wix.clientSecret,
-        code,
-        redirect_uri: config.wix.redirectUri,
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
     });
 
-    if (!tokenResponse.ok) {
-      throw new Error('Failed to get Wix access token');
+    if (!response.ok) {
+      throw new Error('Failed to authenticate with Wix');
     }
 
-    const tokens: WixTokens = await tokenResponse.json();
-
-    // Check subscription status
-    const subscriptionResponse = await fetch('https://www.wixapis.com/members/v1/members/subscription', {
-      headers: {
-        'Authorization': `Bearer ${tokens.access_token}`,
-      },
-    });
-
-    if (!subscriptionResponse.ok) {
-      throw new Error('Failed to verify subscription status');
-    }
-
-    const subscription: WixSubscription = await subscriptionResponse.json();
+    const { tokens, subscription, wixUser } = await response.json();
 
     if (subscription.status !== 'active') {
       addToast({
@@ -62,19 +43,6 @@ export async function signInWithWix(code: string) {
       window.location.href = `${config.wix.siteUrl}/plans-pricing`;
       return null;
     }
-
-    // Get user info from Wix
-    const userResponse = await fetch('https://www.wixapis.com/v1/users', {
-      headers: {
-        'Authorization': `Bearer ${tokens.access_token}`,
-      },
-    });
-
-    if (!userResponse.ok) {
-      throw new Error('Failed to get user info');
-    }
-
-    const wixUser = await userResponse.json();
 
     // Sign in to Supabase using custom JWT
     const { data: { user }, error } = await supabase().auth.signInWithOAuth({

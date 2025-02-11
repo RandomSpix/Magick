@@ -12,4 +12,10 @@ const wixInstance = axios.create({
     },
 });
 
-export default wixInstance;
+export async function checkWixSubscription(userEmail: string): Promise<boolean> {
+    const response = await wixInstance.get(`/v1/memberships/subscriptions`, {
+        params: { email: userEmail }
+    });
+    const data = response.data;
+    return data.status === "active";
+}
